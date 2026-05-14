@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Simulatore Conflitti", layout="wide")
 
-# CSS: Stile fedele, testi neri, pulsanti vivaci e tabelle pulite
+# CSS: Stile consolidato, testi neri, pulsanti vivaci
 st.markdown("""
     <style>
     .stApp { background-color: #fdf2f2 !important; }
@@ -58,11 +58,8 @@ def load_data():
         xls = pd.ExcelFile("prodotti.xlsx")
         attivi = pd.read_excel(xls, sheet_name="Attivi")
         ptf = pd.read_excel(xls, sheet_name="PTF")
-        # Pulizia nomi colonne
         attivi.columns = [c.strip().lower() for c in attivi.columns]
         ptf.columns = [c.strip().lower() for c in ptf.columns]
-        
-        # Dizionari prodotto -> categoria (mantenendo il case originale della categoria per la visualizzazione)
         dict_attivi = dict(zip(attivi['prodotto'].astype(str).str.strip(), attivi['categoria'].astype(str).str.strip()))
         dict_ptf = dict(zip(ptf['prodotto'].astype(str).str.strip(), ptf['categoria'].astype(str).str.strip()))
         return dict_attivi, dict_ptf
@@ -75,7 +72,7 @@ oggi = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("Carica il file prodotti.xlsx con i fogli 'Attivi' e 'PTF'.")
+    st.warning("Carica il file prodotti.xlsx per iniziare.")
     st.stop()
 
 # 1. Selezione Prodotto
@@ -107,10 +104,8 @@ for i, r in enumerate(st.session_state.ev_r):
     if c3.button("🗑️", key=f"delr_{i}"):
         st.session_state.ev_r.pop(i)
         st.rerun()
-    if p:
-        # Ignora se sono già passati 367 giorni
-        if (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
-            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p and (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
+        tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 for i, s in enumerate(st.session_state.ev_s):
     c1, c2, c3 = st.columns([1.5, 1.5, 0.4])
@@ -119,9 +114,8 @@ for i, s in enumerate(st.session_state.ev_s):
     if c3.button("🗑️", key=f"dels_{i}"):
         st.session_state.ev_s.pop(i)
         st.rerun()
-    if p:
-        if (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
-            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p and (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
+        tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 st.markdown("---")
 
@@ -129,45 +123,61 @@ st.markdown("---")
 if st.button("VERIFICA", type="primary"):
     if nuovo_prodotto:
         cat_scelta = prodotti_attivi[nuovo_prodotto].lower()
-        categorie_bloccate = {}
+        
+        # Mappa data sblocco massima per ogni categoria riscontrata negli eventi
+        max_sblocco_cat = {}
         for ev in tutti_eventi:
             cv = ev['cat'].lower()
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
-            if cv not in categorie_bloccate or data_sblocco > categorie_bloccate[cv]:
-                categorie_bloccate[cv] = data_sblocco
+            if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
+                max_sblocco_cat[cv] = data_sblocco
 
-        is_bloccato = False
-        if cat_scelta in categorie_bloccate: is_bloccato = True
-        elif cat_scelta == "risparmio" and "investimento" in categorie_bloccate: is_bloccato = True
+        # Logica specifica per determinare la data di blocco effettiva per ogni categoria "attiva"
+        final_block_dates = {}
+        for p, c in prodotti_attivi.items():
+            cl = c.lower()
+            m_date = None
+            
+            if cl in max_sblocco_cat:
+                m_date = max_sblocco_cat[cl]
+            
+            # Regola speciale: Risparmio è influenzato anche da Investimento
+            if cl == "risparmio" and "investimento" in max_sblocco_cat:
+                date_inv = max_sblocco_cat["investimento"]
+                if m_date is None or date_inv > m_date:
+                    m_date = date_inv
+            
+            if m_date:
+                final_block_dates[p] = m_date
 
+        # Esito prodotto selezionato
+        is_bloccato = nuovo_prodotto in final_block_dates
         st.write("#### Esito Prodotto")
         if is_bloccato:
-            st.error(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **NON PROCEDIBILE**")
+            st.error(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **NON PROCEDIBILE** (fino al {final_block_dates[nuovo_prodotto].strftime('%d/%m/%Y')})")
         else:
             st.success(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **PROCEDIBILE**")
 
         st.markdown("---")
 
-        # --- GESTIONE DINAMICA CATEGORIE ---
+        # --- SUDDIVISIONE PRODOTTI ---
         prods_si = {}
         prods_no = []
 
         for p, c in prodotti_attivi.items():
-            cl = c.lower()
-            m_data = None
-            if cl in categorie_bloccate: m_data = categorie_bloccate[cl]
-            elif cl == "risparmio" and "investimento" in categorie_bloccate: m_data = categorie_bloccate["investimento"]
-            
-            if m_data:
-                prods_no.append({"Prodotto": p, "Categoria": c, "Disponibile dal": m_data.strftime("%d/%m/%Y")})
+            if p in final_block_dates:
+                prods_no.append({
+                    "Prodotto": p, 
+                    "Categoria": c, 
+                    "Disponibile dal": final_block_dates[p].strftime("%d/%m/%Y")
+                })
             else:
                 if c not in prods_si: prods_si[c] = []
                 prods_si[c].append(p)
 
-        # 1. Visualizzazione SI (Prodotti Disponibili)
+        # Visualizzazione SI
         st.write("### ✅ SI - Prodotti Disponibili Oggi")
         if prods_si:
-            # Crea colonne dinamicamente in base a quante categorie ci sono
             si_cols = st.columns(len(prods_si))
             for i, (cat_name, list_p) in enumerate(sorted(prods_si.items())):
                 with si_cols[i]:
@@ -179,10 +189,12 @@ if st.button("VERIFICA", type="primary"):
 
         st.markdown("---")
 
-        # 2. Visualizzazione NO (Tabella prodotti bloccati)
+        # Visualizzazione NO
         st.write("### ❌ NO - Prodotti Momentaneamente Bloccati")
         if prods_no:
-            st.table(pd.DataFrame(prods_no))
+            # Ordiniamo per data di sblocco più recente
+            df_no = pd.DataFrame(prods_no).sort_values(by="Disponibile dal", ascending=False)
+            st.table(df_no)
         else:
             st.write("_Nessun blocco attivo per il futuro._")
 

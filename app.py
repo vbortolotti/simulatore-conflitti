@@ -5,49 +5,54 @@ from datetime import datetime, timedelta
 # Configurazione Pagina
 st.set_page_config(page_title="Simulatore Conflitti", layout="centered")
 
-# CSS: Sfondo rosa, testi neri, forzatura colore nero negli input/date
+# CSS: Copia fedele dello stile dell'immagine (sfondo pesca, testi neri, pulsanti bianchi)
 st.markdown("""
     <style>
-    /* Sfondo rosa chiarissimo */
+    /* Sfondo rosa/pesca dell'immagine */
     .stApp { background-color: #fdf2f2 !important; }
     
-    /* Testi neri ovunque */
+    /* Testi neri e font pulito */
     .stApp p, .stApp span, .stApp label, .stMarkdown, h1, h2, h3, h4 { 
         color: #000000 !important; 
-        font-family: 'Segoe UI', sans-serif !important;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
     }
 
-    /* FORZATURA TESTO NERO NEGLI INPUT (Calendario e Selezioni) */
+    /* FORZATURA TESTO NERO NEGLI INPUT (per evitare che diventi bianco scrivendo) */
     input { color: black !important; }
     div[data-baseweb="select"] div { color: black !important; }
-    div[data-baseweb="calendar"] { color: black !important; }
     
-    /* Box bianchi per input e date */
+    /* Box di inserimento bianchi con bordo sottile grigio */
     div[data-baseweb="select"] > div, 
-    div[data-baseweb="input"] > div, 
-    div[data-baseweb="popover"] {
+    div[data-baseweb="input"] > div,
+    div[role="listbox"] {
         background-color: white !important;
         color: black !important;
-        border: 1px solid #cccccc !important;
+        border: 1px solid #bdc3c7 !important;
     }
 
-    /* Pulsanti bianchi stile Excel */
+    /* Calendario: forziamo il nero anche qui */
+    div[data-baseweb="calendar"] { background-color: white !important; }
+    div[data-baseweb="calendar"] button { color: black !important; }
+
+    /* Pulsanti bianchi (stile tasto "+" nell'immagine) */
     .stButton>button {
         background-color: #ffffff !important;
         color: #000000 !important;
-        border: 1px solid #cccccc !important;
+        border: 1px solid #bdc3c7 !important;
         border-radius: 4px !important;
         font-weight: normal !important;
-        width: auto !important;
-        padding: 2px 15px !important;
+        padding: 2px 10px !important;
     }
     
     .stButton>button:hover {
         border: 1px solid #000000 !important;
-        background-color: #f9f9f9 !important;
+        background-color: #f0f0f0 !important;
     }
 
-    hr { border: 0.5px solid #dddddd !important; }
+    /* Risultati: togliamo i colori accesi, usiamo bordi semplici */
+    .stAlert { background-color: white !important; border: 1px solid #bdc3c7 !important; color: black !important; }
+    
+    hr { border: 0.5px solid #bdc3c7 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -67,19 +72,20 @@ def load_data():
 
 prodotti_attivi, prodotti_ptf = load_data()
 
-st.title("Simulatore Conflitti")
+# Titolo semplice come da immagine
+st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
     st.warning("Carica il file prodotti.xlsx per visualizzare i dati.")
     st.stop()
 
-# --- SEZIONE 1 ---
+# 1. Selezione Prodotto
 st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# --- SEZIONE 2 ---
+# 2. Sezione Riscatti
 st.write("ci sono stati riscatti?")
 if 'riscatti' not in st.session_state: st.session_state.riscatti = []
 if st.button("+", key="add_r"):
@@ -88,8 +94,8 @@ if st.button("+", key="add_r"):
 ev_riscatti = []
 for i, r in enumerate(st.session_state.riscatti):
     c1, c2, c3 = st.columns([2, 1, 0.5])
-    p = c1.selectbox(f"prodotto riscatto {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}", label_visibility="collapsed")
-    d = c2.date_input(f"data liq {i}", value=r['data'], key=f"dr_{i}", label_visibility="collapsed")
+    p = c1.selectbox(f"p_r_{i}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}", label_visibility="collapsed")
+    d = c2.date_input(f"d_r_{i}", value=r['data'], key=f"dr_{i}", label_visibility="collapsed")
     if c3.button("🗑️", key=f"delr_{i}"):
         st.session_state.riscatti.pop(i)
         st.rerun()
@@ -98,7 +104,7 @@ for i, r in enumerate(st.session_state.riscatti):
 st.markdown("<small>Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L'IBAN</small>", unsafe_allow_html=True)
 st.markdown("---")
 
-# --- SEZIONE 3 ---
+# 3. Sezione Risoluzioni
 st.write("ci sono polizze in risoluzione o sospese?")
 if 'risoluzioni' not in st.session_state: st.session_state.risoluzioni = []
 if st.button("+", key="add_s"):
@@ -107,8 +113,8 @@ if st.button("+", key="add_s"):
 ev_risoluzioni = []
 for i, r in enumerate(st.session_state.risoluzioni):
     c1, c2, c3 = st.columns([2, 1, 0.5])
-    p = c1.selectbox(f"prodotto risol {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}", label_visibility="collapsed")
-    d = c2.date_input(f"data interr {i}", value=r['data'], key=f"ds_{i}", label_visibility="collapsed")
+    p = c1.selectbox(f"p_s_{i}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}", label_visibility="collapsed")
+    d = c2.date_input(f"d_s_{i}", value=r['data'], key=f"ds_{i}", label_visibility="collapsed")
     if c3.button("🗑️", key=f"dels_{i}"):
         st.session_state.risoluzioni.pop(i)
         st.rerun()
@@ -116,7 +122,7 @@ for i, r in enumerate(st.session_state.risoluzioni):
 
 st.markdown("---")
 
-# --- SEZIONE 4: RISULTATO ---
+# 4. Verifica e Risultati
 if st.button("VERIFICA"):
     if nuovo_prodotto:
         cat_n = prodotti_attivi[nuovo_prodotto].lower()
@@ -129,19 +135,20 @@ if st.button("VERIFICA"):
             dv = datetime.combine(ev['data'], datetime.min.time())
             if cv not in date_per_cat or dv > date_per_cat[cv]: date_per_cat[cv] = dv
             
+            # Logica blocchi
             if (cat_n == "protezione" and cv == "protezione") or \
                (cat_n == "previdenza" and cv == "previdenza") or \
                (cat_n == "investimento" and cv == "investimento") or \
                (cat_n == "risparmio" and (cv == "investimento" or cv == "risparmio")):
                 bloccato = True
 
-        st.markdown("### risultato")
+        st.write("#### risultato")
         if bloccato:
-            st.error(f"Per il prodotto {nuovo_prodotto} l'esito è: **NON PROCEDIBILE**")
+            st.write(f"Per il prodotto {nuovo_prodotto} l'esito è: **NON PROCEDIBILE**")
         else:
-            st.success(f"Per il prodotto {nuovo_prodotto} l'esito è: **PROCEDIBILE**")
+            st.write(f"Per il prodotto {nuovo_prodotto} l'esito è: **PROCEDIBILE**")
 
-        st.markdown("**per il prodotto che hai scelto è possibile fare i seguenti prodotti**")
+        st.markdown("<br> **per il prodotto che hai scelto è possibile fare i seguenti prodotti**", unsafe_allow_html=True)
         disponibili = []
         blocchi = {}
 
@@ -153,7 +160,7 @@ if st.button("VERIFICA"):
                 if (cl == "protezione" and cv == "protezione") or \
                    (cl == "previdenza" and cv == "previdenza") or \
                    (cl == "investimento" and cv == "investimento") or \
-                   (cl == "risparmio" and (cl == "risparmio" and (cv == "investimento" or cv == "risparmio"))):
+                   (cl == "risparmio" and (cv == "investimento" or cv == "risparmio")):
                     conf = True
                 
                 if conf:
@@ -169,8 +176,8 @@ if st.button("VERIFICA"):
         st.write(", ".join(disponibili) if disponibili else "Nessuno")
 
         st.markdown("---")
-        st.markdown("**i seguenti prodotti saranno disponibili dopo la data riportata**")
+        st.write("**i seguenti prodotti saranno disponibili dopo la data riportata**")
         for d_s, prods in blocchi.items():
-            st.info(f"Dal {d_s}: " + ", ".join(prods))
+            st.write(f"**Dal {d_s}:** {', '.join(prods)}")
 
 st.markdown("<br><br><small>Questo simulatore non fornisce elemento certo e non è perfetto, non verifica ad esempio le componenti protection.</small>", unsafe_allow_html=True)

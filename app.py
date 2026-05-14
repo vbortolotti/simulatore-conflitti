@@ -5,52 +5,58 @@ from datetime import datetime, timedelta
 # Configurazione Pagina
 st.set_page_config(page_title="Simulatore Conflitti", layout="centered")
 
-# CSS: Sfondo rosa, nota azzurra/blu, pulsanti azzurri e verde chiaro
+# CSS: Sfondo rosa, nota azzurra, pulsanti colorati
 st.markdown("""
     <style>
-    /* Sfondo rosa pesca dell'immagine */
+    /* Sfondo rosa pesca */
     .stApp { background-color: #fdf2f2 !important; }
     
-    /* Testi neri e forzatura colore nero negli input */
+    /* Testi neri */
     .stApp p, .stApp span, .stApp label, .stMarkdown, h1, h2, h3, h4 { 
         color: #000000 !important; 
     }
     input { color: black !important; }
-    div[data-baseweb="select"] div { color: black !important; }
 
-    /* BOX NOTA: Azzurro con contorno Blu */
+    /* BOX NOTA: Azzurro chiaro con bordo blu */
     .nota-box {
-        background-color: #e1f5fe !important;
-        border: 2px solid #01579b !important;
-        padding: 10px !important;
-        border-radius: 5px !important;
-        margin-bottom: 20px !important;
-        color: #000000 !important;
+        background-color: #e3f2fd !important;
+        border: 2px solid #1976d2 !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
+        margin: 10px 0px !important;
     }
 
-    /* PULSANTI AGGIUNGI: Azzurro più scuro */
-    .stButton>button[key^="add_"] {
-        background-color: #0288d1 !important;
-        color: white !important;
+    /* Stile generale pulsanti per sovrascrivere Streamlit */
+    .stButton > button {
+        border-radius: 5px !important;
         border: none !important;
-        border-radius: 5px !important;
         font-weight: bold !important;
+        transition: 0.3s;
     }
 
-    /* TASTO VERIFICA: Verde chiaro */
-    div.stButton > button:first-child[key="verify_btn"] {
-        background-color: #90ee90 !important;
+    /* PULSANTI AGGIUNGI: Azzurro Cielo Brillante */
+    div[data-testid="stHorizontalBlock"] div:nth-of-type(1) button {
+        background-color: #4fc3f7 !important;
+        color: white !important;
+    }
+    div[data-testid="stHorizontalBlock"] div:nth-of-type(2) button {
+        background-color: #4fc3f7 !important;
+        color: white !important;
+    }
+
+    /* TASTO VERIFICA: Verde Chiaro Brillante */
+    .verify-container button {
+        background-color: #b2ff59 !important;
         color: black !important;
-        border: 1px solid #7ccd7c !important;
-        font-weight: bold !important;
         width: 100% !important;
-        height: 3em !important;
+        height: 3.5em !important;
+        font-size: 1.2em !important;
+        border: 1px solid #76ff03 !important;
     }
 
     /* Box bianchi per input */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
         background-color: white !important;
-        color: black !important;
         border: 1px solid #cccccc !important;
     }
     </style>
@@ -75,14 +81,14 @@ prodotti_attivi, prodotti_ptf = load_data()
 st.title("Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("Carica il file prodotti.xlsx per iniziare.")
+    st.warning("Assicurati di avere il file prodotti.xlsx con i fogli 'Attivi' e 'PTF'")
     st.stop()
 
 # --- SEZIONE 1 ---
 st.write("ciao inserisci il prodotto che vuoi fare")
-nuovo_prodotto = st.selectbox("", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
+nuovo_prodotto = st.selectbox("", options=[""] + sorted(list(prodotti_attivi.keys())), key="main_prod", label_visibility="collapsed")
 
-# NOTA EVIDENZIATA
+# NOTA AZZURRA
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L\'IBAN</div>', unsafe_allow_html=True)
 
 st.markdown("---")
@@ -90,34 +96,34 @@ st.markdown("---")
 # --- SEZIONE 2: EVENTI PRECEDENTI ---
 st.write("### 2 Eventi precedenti")
 
-# Liste per gestire gli eventi separatamente
 if 'ev_r' not in st.session_state: st.session_state.ev_r = []
 if 'ev_s' not in st.session_state: st.session_state.ev_s = []
 
 col1, col2 = st.columns(2)
 with col1:
-    if st.button("+aggiungi riscatto", key="add_r"):
+    if st.button("+aggiungi riscatto"):
         st.session_state.ev_r.append({"data": datetime.now()})
 with col2:
-    if st.button("+aggiungi risoluzione o sospese", key="add_s"):
+    if st.button("+aggiungi risoluzione o sospese"):
         st.session_state.ev_s.append({"data": datetime.now()})
 
-# Visualizzazione dinamica eventi
 tutti_eventi_input = []
 
+# Gestione Riscatti
 for i, r in enumerate(st.session_state.ev_r):
     c1, c2, c3 = st.columns([2, 1, 0.5])
-    p = c1.selectbox(f"Riscatto {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
-    d = c2.date_input(f"Data riscatto {i}", value=r['data'], key=f"dr_{i}")
+    p = c1.selectbox(f"Seleziona prodotto riscatto {i}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
+    d = c2.date_input(f"Data {i}", value=r['data'], key=f"dr_{i}")
     if c3.button("🗑️", key=f"delr_{i}"):
         st.session_state.ev_r.pop(i)
         st.rerun()
     if p: tutti_eventi_input.append({"cat": prodotti_ptf[p], "data": d})
 
+# Gestione Risoluzioni
 for i, s in enumerate(st.session_state.ev_s):
     c1, c2, c3 = st.columns([2, 1, 0.5])
-    p = c1.selectbox(f"Risoluzione {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}")
-    d = c2.date_input(f"Data risoluzione {i}", value=s['data'], key=f"ds_{i}")
+    p = c1.selectbox(f"Seleziona prodotto risoluzione {i}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}")
+    d = c2.date_input(f"Data {i}", value=s['data'], key=f"ds_{i}")
     if c3.button("🗑️", key=f"dels_{i}"):
         st.session_state.ev_s.pop(i)
         st.rerun()
@@ -126,12 +132,13 @@ for i, s in enumerate(st.session_state.ev_s):
 st.markdown("---")
 
 # --- VERIFICA ---
-if st.button("VERIFICA", key="verify_btn"):
+st.markdown('<div class="verify-container">', unsafe_allow_html=True)
+if st.button("VERIFICA"):
     if nuovo_prodotto:
         cat_n = prodotti_attivi[nuovo_prodotto].lower()
-        
         date_per_cat = {}
         bloccato = False
+        
         for ev in tutti_eventi_input:
             cv = ev['cat'].lower()
             dv = datetime.combine(ev['data'], datetime.min.time())
@@ -143,7 +150,7 @@ if st.button("VERIFICA", key="verify_btn"):
                (cat_n == "risparmio" and (cv == "investimento" or cv == "risparmio")):
                 bloccato = True
 
-        st.markdown("### risultato")
+        st.write("#### risultato")
         if bloccato:
             st.error(f"Per il prodotto {nuovo_prodotto} l'esito è: **NON PROCEDIBILE**")
         else:
@@ -176,5 +183,6 @@ if st.button("VERIFICA", key="verify_btn"):
         st.markdown("**i seguenti prodotti saranno disponibili dopo la data riportata**")
         for d_s, prods in blocchi.items():
             st.info(f"Dal {d_s}: " + ", ".join(prods))
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("<br><br><small>Questo simulatore non fornisce elemento certo e non è perfetto.</small>", unsafe_allow_html=True)

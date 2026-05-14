@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Simulatore Conflitti", layout="centered")
 
-# CSS: Stile consolidato con visibilità garantita e colori vivaci
+# CSS: Stile fedele all'immagine, testi neri e colori vivaci
 st.markdown("""
     <style>
     .stApp { background-color: #fdf2f2 !important; }
@@ -98,6 +98,10 @@ with col2:
 
 tutti_eventi = []
 
+# Funzione per filtrare date vecchie
+def is_valid_conflict(date_input):
+    return (datetime.combine(date_input, datetime.min.time()) + timedelta(days=367)) > oggi
+
 for i, r in enumerate(st.session_state.ev_r):
     c1, c2, c3 = st.columns([1.5, 1.5, 0.4])
     p = c1.selectbox(f"Prodotto Riscatto #{i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
@@ -105,9 +109,8 @@ for i, r in enumerate(st.session_state.ev_r):
     if c3.button("🗑️", key=f"delr_{i}"):
         st.session_state.ev_r.pop(i)
         st.rerun()
-    if p:
-        if (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
-            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p and is_valid_conflict(d):
+        tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 for i, s in enumerate(st.session_state.ev_s):
     c1, c2, c3 = st.columns([1.5, 1.5, 0.4])
@@ -116,94 +119,72 @@ for i, s in enumerate(st.session_state.ev_s):
     if c3.button("🗑️", key=f"dels_{i}"):
         st.session_state.ev_s.pop(i)
         st.rerun()
-    if p:
-        if (datetime.combine(d, datetime.min.time()) + timedelta(days=367)) > oggi:
-            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p and is_valid_conflict(d):
+        tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 st.markdown("---")
 
-# 3. VERIFICA E ANALISI CATEGORIE
+# 3. VERIFICA
 if st.button("VERIFICA", type="primary"):
     if nuovo_prodotto:
         cat_scelta = prodotti_attivi[nuovo_prodotto].lower()
-        
-        # Mappa dei blocchi attivi per categoria
         categorie_bloccate = {}
         for ev in tutti_eventi:
             cv = ev['cat'].lower()
-            dv = datetime.combine(ev['data'], datetime.min.time())
-            data_sblocco = dv + timedelta(days=367)
+            data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             if cv not in categorie_bloccate or data_sblocco > categorie_bloccate[cv]:
                 categorie_bloccate[cv] = data_sblocco
 
-        # Controllo specifico prodotto scelto
-        is_bloccato = False
-        if cat_scelta in categorie_bloccate:
-            # Protezione/Previdenza/Investimento bloccano se stesse
-            is_bloccato = True
-        elif cat_scelta == "risparmio" and ("investimento" in categorie_bloccate or "risparmio" in categorie_bloccate):
-            # Risparmio è bloccato da Investimento O Risparmio
-            is_bloccato = True
+        # Check prodotto scelto
+        check_blocco = False
+        if cat_scelta in categorie_bloccate: check_blocco = True
+        elif cat_scelta == "risparmio" and "investimento" in categorie_bloccate: check_blocco = True
 
         st.write("#### Risultato Prodotto Selezionato")
-        if is_bloccato:
+        if check_blocco:
             st.error(f"Per il prodotto {nuovo_prodotto} l'esito è: **NON PROCEDIBILE**")
         else:
             st.success(f"Per il prodotto {nuovo_prodotto} l'esito è: **PROCEDIBILE**")
 
         st.markdown("---")
-        
-        # --- ANALISI PER TUTTE LE CATEGORIE ---
-        st.write("### Analisi Disponibilità per Categoria")
-        
-        # Definiamo le 4 categorie principali
-        cats = ["Protezione", "Previdenza", "Investimento", "Risparmio"]
-        col_cats = st.columns(4)
-        
-        for i, c_name in enumerate(cats):
-            c_low = c_name.lower()
-            status = "✅ SI"
-            info_sblocco = ""
-            
-            # Logica di blocco per categoria
-            if c_low in categorie_bloccate:
-                status = "❌ NO"
-                info_sblocco = f"Fino al {categorie_bloccate[c_low].strftime('%d/%m/%Y')}"
-            elif c_low == "risparmio" and "investimento" in categorie_bloccate:
-                status = "❌ NO"
-                info_sblocco = f"Fino al {categorie_bloccate['investimento'].strftime('%d/%m/%Y')}"
-            
-            with col_cats[i]:
-                st.metric(label=c_name, value=status, delta=info_sblocco, delta_color="inverse" if "❌" in status else "normal")
 
-        st.markdown("---")
+        # --- SEZIONE PRODOTTI DISPONIBILI (SUDDIVISI PER CATEGORIA) ---
+        st.write("### ✅ SI - Prodotti Disponibili Oggi")
         
-        # Liste dettagliate prodotti
-        st.write("**Dettaglio prodotti sottoscrivibili oggi:**")
-        disp, blocchi = [], {}
+        prods_si = {"Protezione": [], "Previdenza": [], "Investimento": [], "Risparmio": []}
+        prods_no = []
 
         for p, c in prodotti_attivi.items():
             cl = c.lower()
             m_data = None
-            
-            # Verifica se questo specifico prodotto è bloccato
-            if cl in categorie_bloccate:
-                m_data = categorie_bloccate[cl]
-            elif cl == "risparmio" and "investimento" in categorie_bloccate:
-                m_data = categorie_bloccate["investimento"]
+            if cl in categorie_bloccate: m_data = categorie_bloccate[cl]
+            elif cl == "risparmio" and "investimento" in categorie_bloccate: m_data = categorie_bloccate["investimento"]
             
             if m_data:
-                ds_str = m_data.strftime("%d/%m/%Y")
-                if ds_str not in blocchi: blocchi[ds_str] = []
-                blocchi[ds_str].append(p)
+                prods_no.append({"prodotto": p, "categoria": c, "sblocco": m_data.strftime("%d/%m/%Y")})
             else:
-                disp.append(p)
+                prods_si[c].append(p)
 
-        st.write(", ".join(disp) if disp else "Nessuno")
-        
-        if blocchi:
-            st.markdown("<br>**I seguenti prodotti saranno disponibili dopo la data riportata:**", unsafe_allow_html=True)
-            for d_s, prods in blocchi.items():
-                st.warning(f"**Dal {d_s}:** {', '.join(prods)}")
+        # Mostra SI in colonne
+        cols = st.columns(4)
+        for i, (cat_name, list_p) in enumerate(prods_si.items()):
+            with cols[i]:
+                st.markdown(f"**{cat_name}**")
+                if list_p:
+                    for lp in list_p: st.write(f"- {lp}")
+                else:
+                    st.write("_Nessuno_")
+
+        st.markdown("---")
+
+        # --- SEZIONE PRODOTTI BLOCCATI (TABELLA) ---
+        st.write("### ❌ NO - Prodotti Momentaneamente Bloccati")
+        if prods_no:
+            df_no = pd.DataFrame(prods_no)
+            # Rinominiamo colonne per estetica
+            df_no.columns = ["Prodotto", "Categoria", "Disponibile dal"]
+            st.table(df_no)
+        else:
+            st.write("_Nessun prodotto bloccato._")
 
 st.markdown("<br><br><small>Questo simulatore non fornisce elemento certo e non è perfetto.</small>", unsafe_allow_html=True)

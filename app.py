@@ -2,48 +2,47 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
-# Configurazione Pagina
 st.set_page_config(page_title="Simulatore Conflitti", layout="centered")
 
-# CSS: Sfondo rosa, nota azzurra, e forzatura colori pulsanti
+# CSS DEFINITIVO PER COLORI VIVACI
 st.markdown("""
     <style>
-    /* Sfondo rosa pesca */
+    /* Sfondo Rosa Pesca */
     .stApp { background-color: #fdf2f2 !important; }
     
-    /* Testi neri e forzatura colori input */
+    /* Testi Neri */
     .stApp p, .stApp span, .stApp label, .stMarkdown, h1, h2, h3, h4 { color: #000000 !important; }
-    input { color: black !important; }
 
     /* BOX NOTA: Azzurro con contorno Blu */
     .nota-box {
         background-color: #e1f5fe !important;
         border: 2px solid #01579b !important;
-        padding: 10px !important;
-        border-radius: 5px !important;
+        padding: 12px !important;
+        border-radius: 8px !important;
         margin: 10px 0px !important;
+        font-weight: 500;
     }
 
-    /* PULSANTI AGGIUNGI: Azzurro Cielo */
-    div.stButton > button:first-child[key^="add_"] {
-        background-color: #81d4fa !important;
-        color: black !important;
-        border: 1px solid #0288d1 !important;
-        width: 100% !important;
-    }
-
-    /* PULSANTE VERIFICA: Verde Chiaro Forzato */
-    div.stButton > button:first-child[key="verify_btn"] {
-        background-color: #90ee90 !important;
-        color: black !important;
-        border: 2px solid #32cd32 !important;
+    /* PULSANTI AGGIUNGI: Azzurro Cielo Brillante */
+    button[kind="secondary"] {
+        background-color: #00b0ff !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 6px !important;
         font-weight: bold !important;
-        font-size: 1.2rem !important;
-        height: 3.5rem !important;
+    }
+
+    /* PULSANTE VERIFICA: Verde Prato Chiaro Brillante */
+    button[kind="primary"] {
+        background-color: #76ff03 !important;
+        color: black !important;
+        border: 2px solid #64dd17 !important;
+        font-weight: bold !important;
+        font-size: 1.1rem !important;
         width: 100% !important;
     }
 
-    /* Box bianchi per input */
+    /* Input bianchi */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
         background-color: white !important;
         border: 1px solid #cccccc !important;
@@ -70,10 +69,10 @@ prodotti_attivi, prodotti_ptf = load_data()
 st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("In attesa del file prodotti.xlsx...")
+    st.warning("Assicurati di caricare 'prodotti.xlsx' su GitHub.")
     st.stop()
 
-# --- SEZIONE 1 ---
+# 1. Selezione Prodotto
 st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
@@ -82,17 +81,18 @@ st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCAT
 
 st.markdown("---")
 
-# --- SEZIONE 2 ---
+# 2. Eventi Precedenti
 st.write("### 2 Eventi precedenti")
 if 'ev_r' not in st.session_state: st.session_state.ev_r = []
 if 'ev_s' not in st.session_state: st.session_state.ev_s = []
 
 col1, col2 = st.columns(2)
 with col1:
-    if st.button("+aggiungi riscatto", key="add_risc"):
+    # kind="secondary" per i tasti azzurri
+    if st.button("+aggiungi riscatto", type="secondary"):
         st.session_state.ev_r.append({"data": datetime.now()})
 with col2:
-    if st.button("+aggiungi risoluzione o sospese", key="add_risol"):
+    if st.button("+aggiungi risoluzione o sospese", type="secondary"):
         st.session_state.ev_s.append({"data": datetime.now()})
 
 tutti_eventi = []
@@ -117,8 +117,8 @@ for i, s in enumerate(st.session_state.ev_s):
 
 st.markdown("---")
 
-# --- VERIFICA ---
-if st.button("VERIFICA", key="verify_btn"):
+# VERIFICA: kind="primary" per il tasto verde
+if st.button("VERIFICA", type="primary"):
     if nuovo_prodotto:
         cat_n = prodotti_attivi[nuovo_prodotto].lower()
         date_per_cat = {}

@@ -8,70 +8,70 @@ st.set_page_config(page_title="Simulatore Conflitti Generali", layout="centered"
 # CSS per lo sfondo rosso leggero e pulsanti rossi
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #fdf2f2;
-    }
-    .stButton>button {
-        background-color: #C52228;
-        color: white;
-        border-radius: 5px;
-    }
-    h1, h2, h3 {
-        color: #C52228;
-    }
+    .stApp { background-color: #fdf2f2; }
+    .stButton>button { background-color: #C52228; color: white; border-radius: 5px; border: none; }
+    .stButton>button:hover { background-color: #9e1b20; color: white; }
+    h1, h2, h3 { color: #C52228; }
     </style>
     """, unsafe_allow_html=True)
 
-# Funzione per caricare i dati dall'Excel
 @st.cache_data
 def load_data():
     try:
-        # Carica i due fogli dall'Excel
-        attivi = pd.read_excel("prodotti.xlsx", sheet_name="Attivi")
-        ptf = pd.read_excel("prodotti.xlsx", sheet_name="PTF")
+        # Carica i due fogli
+        xls = pd.ExcelFile("prodotti.xlsx")
+        attivi = pd.read_excel(xls, sheet_name="Attivi")
+        ptf = pd.read_excel(xls, sheet_name="PTF")
         
-        # Trasforma in dizionari (pulendo eventuali spazi nei nomi colonne)
-        dict_attivi = dict(zip(attivi['prodotto'].str.strip(), attivi['categoria'].str.strip()))
-        dict_ptf = dict(zip(ptf['prodotto'].str.strip(), ptf['categoria'].str.strip()))
+        # Pulizia nomi colonne (toglie spazi extra e mette minuscolo per il controllo)
+        attivi.columns = [c.strip().lower() for c in attivi.columns]
+        ptf.columns = [c.strip().lower() for c in ptf.columns]
+
+        # Verifica se la colonna esiste (cerca 'prodotto' o 'prodotto ')
+        col_prod = 'prodotto'
+        col_cat = 'categoria'
+
+        dict_attivi = dict(zip(attivi[col_prod].astype(str).str.strip(), attivi[col_cat].astype(str).str.strip()))
+        dict_ptf = dict(zip(ptf[col_prod].astype(str).str.strip(), ptf[col_cat].astype(str).str.strip()))
+        
         return dict_attivi, dict_ptf
     except Exception as e:
-        st.error(f"Errore nel caricamento del file prodotti.xlsx: {e}")
+        st.error(f"Errore tecnico: Assicurati che le colonne nell'Excel si chiamino 'prodotto' e 'categoria'. Errore: {e}")
         return {}, {}
 
 prodotti_attivi, prodotti_ptf = load_data()
 
-st.title("🔴 Simulatore Conflitto di Interessi")
-st.write("Struttura basata sui criteri di conformità per nuove emissioni.")
+st.title("🔴 Simulatore Conflitti Generali")
 
 if not prodotti_attivi:
-    st.info("In attesa del file prodotti.xlsx su GitHub...")
+    st.warning("Carica il file 'prodotti.xlsx' con i fogli 'Attivi' e 'PTF' per iniziare.")
     st.stop()
 
 # --- INTERFACCIA ---
 st.subheader("1. Selezione Prodotto")
-nuovo_prodotto = st.selectbox("Cosa vuoi proporre al cliente?", options=[""] + list(prodotti_attivi.keys()))
+nuovo_prodotto = st.selectbox("Cosa vuoi proporre al cliente?", options=[""] + sorted(list(prodotti_attivi.keys())))
 
 st.info("ℹ️ Verifica anche l'IBAN di accredito per identificare eventuali riscatti collegati.")
 
-st.subheader("2. Eventi Precedenti")
+st.subheader("2. Eventi Precedenti (Riscatti/Risoluzioni)")
 if 'eventi' not in st.session_state:
     st.session_state.eventi = []
 
-col_a, col_b = st.columns(2)
-with col_a:
+c1, c2 = st.columns(2)
+with c1:
     if st.button("+ Riscatto"):
         st.session_state.eventi.append({"tipo": "Riscatto", "data": datetime.now()})
-with col_b:
+with c2:
     if st.button("+ Risoluzione/Sospensione"):
         st.session_state.eventi.append({"tipo": "Risoluzione", "data": datetime.now()})
 
 eventi_validi = []
 for i, ev in enumerate(st.session_state.eventi):
     with st.expander(f"{ev['tipo']} #{i+1}", expanded=True):
-        c1, c2, c3 = st.columns([2, 1, 0.5])
-        nome_v = c1.selectbox(f"Prodotto vecchio", options=[""] + sorted(list(prodotti_ptf.keys())), key=f"n_{i}")
-        data_v = c2.date_input(f"Data", value=ev['data'], key=f"d_{i}")
-        if c3.button("🗑️", key=f"del_{i}"):
+        col_a, col_b, col_c = st.columns([2, 1, 0.5])
+        nome_v = col_a.selectbox(f"Seleziona prodotto vecchio", options=[""] + sorted(list(prodotti_ptf.keys())), key=f"n_{i}")
+        data_v = col_b.date_input(f"Data evento", value=ev['data'], key=f"d_{i}")
+        if col_c.button("🗑️", key=f"del_{i}"):
             st.session_state.eventi.pop(i)
             st.rerun()
         if nome_v:
@@ -86,7 +86,7 @@ if st.button("ESEGUI VERIFICA", use_container_width=True):
         cat_nuovo = prodotti_attivi[nuovo_prodotto].lower()
         conflitto = False
         data_max = None
-        dettaglio_conflitto = ""
+        dettaglio = ""
 
         for ev in eventi_validi:
             cat_v = ev['cat'].lower()
@@ -101,19 +101,17 @@ if st.button("ESEGUI VERIFICA", use_container_width=True):
             elif cat_nuovo == "risparmio" and (cat_v == "investimento" or cat_v == "risparmio"): conflitto = True
             
             if conflitto:
-                dettaglio_conflitto = f"Conflitto tra categoria {cat_nuovo.upper()} e prodotto vecchio {ev['nome']} ({cat_v.upper()})"
+                dettaglio = f"Conflitto tra {nuovo_prodotto} ({cat_nuovo}) e {ev['nome']} ({cat_v})"
                 break
 
         if conflitto:
-            st.error(f"### ❌ NON PROCEDIBILE\n{dettaglio_conflitto}")
+            st.error(f"### ❌ NON PROCEDIBILE\n{dettaglio}")
         else:
             st.success("### ✅ PROCEDIBILE")
 
-        # Analisi disponibilità complessiva
+        # Liste disponibilità
         cats_inserite = [ev['cat'].lower() for ev in eventi_validi]
-        disponibili = []
-        bloccati = []
-
+        disp, blocc = [], []
         for p, c in prodotti_attivi.items():
             c_l = c.lower()
             ok = True
@@ -122,16 +120,16 @@ if st.button("ESEGUI VERIFICA", use_container_width=True):
             elif c_l == "investimento" and "investimento" in cats_inserite: ok = False
             elif c_l == "risparmio" and ("investimento" in cats_inserite or "risparmio" in cats_inserite): ok = False
             
-            if ok: disponibili.append(p)
-            else: bloccati.append(p)
+            if ok: disp.append(p)
+            else: blocc.append(p)
 
-        st.write("**Prodotti che puoi fare oggi:**")
-        st.write(", ".join(disponibili) if disponibili else "Nessuno")
+        st.write("**Prodotti sottoscrivibili oggi:**")
+        st.write(", ".join(disp) if disp else "Nessuno")
 
-        if bloccati and data_max:
+        if blocc and data_max:
             sblocco = data_max + timedelta(days=367)
-            st.warning(f"**Prodotti disponibili dal {sblocco.strftime('%d/%m/%Y')}:**")
-            st.write(", ".join(bloccati))
+            st.warning(f"**Disponibili dal {sblocco.strftime('%d/%m/%Y')}:**")
+            st.write(", ".join(blocc))
 
 st.markdown("---")
-st.caption("⚠️ Questo simulatore non fornisce elemento certo e non è perfetto, non verifica ad esempio le componenti protection.")
+st.caption("Questo simulatore non fornisce elemento certo e non è perfetto, non verifica ad esempio le componenti protection.")

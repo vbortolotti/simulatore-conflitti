@@ -4,16 +4,13 @@ from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Simulatore Conflitti", layout="centered")
 
-# CSS DEFINITIVO: FORZATURA TESTO NERO E COLORI RICHIESTI
+# CSS: FORZATURA TESTO NERO E COLORI RICHIESTI
 st.markdown("""
     <style>
-    /* Sfondo Rosa Pesca */
     .stApp { background-color: #fdf2f2 !important; }
-    
-    /* Testi Neri ovunque */
     .stApp p, .stApp span, .stApp label, .stMarkdown, h1, h2, h3, h4 { color: #000000 !important; }
 
-    /* FORZATURA TESTO NERO NEI CAMPI BIANCHI (Cruciale per visibilità) */
+    /* FORZATURA TESTO NERO NEI CAMPI BIANCHI */
     input { color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
     div[data-baseweb="select"] * { color: #000000 !important; }
     div[role="listbox"] * { color: #000000 !important; }
@@ -29,7 +26,7 @@ st.markdown("""
         font-weight: 500;
     }
 
-    /* PULSANTI AGGIUNGI: Azzurro Cielo Brillante */
+    /* PULSANTI AGGIUNGI: Azzurro Cielo */
     button[kind="secondary"] {
         background-color: #00b0ff !important;
         color: white !important;
@@ -38,7 +35,7 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* PULSANTE VERIFICA: Verde Prato Chiaro Brillante */
+    /* PULSANTE VERIFICA: Verde Prato Chiaro */
     button[kind="primary"] {
         background-color: #76ff03 !important;
         color: black !important;
@@ -48,7 +45,6 @@ st.markdown("""
         width: 100% !important;
     }
 
-    /* Input bianchi puliti */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
         background-color: white !important;
         border: 1px solid #cccccc !important;
@@ -71,11 +67,12 @@ def load_data():
         return {}, {}
 
 prodotti_attivi, prodotti_ptf = load_data()
+oggi = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
 st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("Assicurati di caricare 'prodotti.xlsx' con i fogli corretti.")
+    st.warning("Assicurati di caricare 'prodotti.xlsx'.")
     st.stop()
 
 # 1. Selezione Prodotto
@@ -105,22 +102,30 @@ tutti_eventi = []
 # Gestione Riscatti
 for i, r in enumerate(st.session_state.ev_r):
     c1, c2, c3 = st.columns([1.5, 1.5, 0.4])
-    p = c1.selectbox(f"Seleziona Prodotto #{i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
+    p = c1.selectbox(f"Seleziona Prodotto Riscatto #{i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
     d = c2.date_input(f"Data liquidazione riscatto", value=r['data'], key=f"dr_{i}")
     if c3.button("🗑️", key=f"delr_{i}"):
         st.session_state.ev_r.pop(i)
         st.rerun()
-    if p: tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p:
+        data_evento = datetime.combine(d, datetime.min.time())
+        # Ignora se sono già passati 367 giorni
+        if (data_evento + timedelta(days=367)) > oggi:
+            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 # Gestione Risoluzioni
 for i, s in enumerate(st.session_state.ev_s):
     c1, c2, c3 = st.columns([1.5, 1.5, 0.4])
-    p = c1.selectbox(f"Seleziona Prodotto #{i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}")
+    p = c1.selectbox(f"Seleziona Prodotto Risoluzione #{i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}")
     d = c2.date_input(f"Data interruzione polizza", value=s['data'], key=f"ds_{i}")
     if c3.button("🗑️", key=f"dels_{i}"):
         st.session_state.ev_s.pop(i)
         st.rerun()
-    if p: tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
+    if p:
+        data_evento = datetime.combine(d, datetime.min.time())
+        # Ignora se sono già passati 367 giorni
+        if (data_evento + timedelta(days=367)) > oggi:
+            tutti_eventi.append({"cat": prodotti_ptf[p], "data": d})
 
 st.markdown("---")
 
@@ -162,9 +167,12 @@ if st.button("VERIFICA", type="primary"):
                    (cl == "risparmio" and (cv == "investimento" or cv == "risparmio")):
                     conf = True
                 if conf:
-                    ds = (dv + timedelta(days=367)).strftime("%d/%m/%Y")
-                    if m_data is None or datetime.strptime(ds, "%d/%m/%Y") > datetime.strptime(m_data, "%d/%m/%Y"):
-                        m_data = ds
+                    data_sblocco = dv + timedelta(days=367)
+                    if data_sblocco > oggi:
+                        ds_str = data_sblocco.strftime("%d/%m/%Y")
+                        if m_data is None or data_sblocco > datetime.strptime(m_data, "%d/%m/%Y"):
+                            m_data = ds_str
+            
             if not m_data: disp.append(p)
             else:
                 if m_data not in blocchi: blocchi[m_data] = []
@@ -172,8 +180,11 @@ if st.button("VERIFICA", type="primary"):
 
         st.write(", ".join(disp) if disp else "Nessuno")
         st.markdown("---")
-        st.write("**i seguenti prodotti saranno disponibili dopo la data riportata**")
-        for d_s, prods in blocchi.items():
-            st.info(f"Dal {d_s}: " + ", ".join(prods))
+        if blocchi:
+            st.write("**i seguenti prodotti saranno disponibili dopo la data riportata**")
+            for d_s, prods in blocchi.items():
+                st.info(f"Dal {d_s}: " + ", ".join(prods))
+        else:
+            st.write("_Nessun blocco attivo per il futuro._")
 
 st.markdown("<br><br><small>Questo simulatore non fornisce elemento certo e non è perfetto.</small>", unsafe_allow_html=True)

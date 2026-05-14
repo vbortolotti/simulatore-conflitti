@@ -5,55 +5,34 @@ from datetime import datetime, timedelta
 # Configurazione Pagina
 st.set_page_config(page_title="Simulatore Conflitti Generali", layout="centered")
 
-# CSS: Sfondo rosa, rosso acceso per bottoni e testi neri forzati
+# CSS: Stile basato sull'immagine (Rosa, Rosso Acceso, Testi Neri)
 st.markdown("""
     <style>
-    /* Sfondo rosa leggero */
-    .stApp {
-        background-color: #fdf2f2 !important;
-    }
+    .stApp { background-color: #fdf2f2 !important; }
     
-    /* Testo principale sempre Nero per massima leggibilità */
-    .stApp p, .stApp span, .stApp label, .stMarkdown {
-        color: #1a1a1a !important;
-        font-weight: 500;
-    }
+    /* Testo Nero forzato */
+    .stApp p, .stApp span, .stApp label, .stMarkdown { color: #1a1a1a !important; font-weight: 500; }
 
-    /* Titoli Rosso Acceso Generali */
-    h1, h2, h3 {
-        color: #E4002B !important;
-        font-weight: bold;
-    }
+    /* Titoli Rosso Generali */
+    h1, h2, h3, h4 { color: #E4002B !important; font-weight: bold; }
 
-    /* Pulsanti Rosso Acceso (#E4002B) con testo bianco */
+    /* Bottoni Rosso Acceso */
     .stButton>button {
         background-color: #E4002B !important;
         color: white !important;
-        border-radius: 8px !important;
+        border-radius: 5px !important;
         border: none !important;
         font-weight: bold !important;
-        height: 3em !important;
         width: 100% !important;
-        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
     }
     
-    .stButton>button:hover {
-        background-color: #ff1a40 !important;
-        color: white !important;
-    }
+    /* Stile per i box dei risultati (successo/errore) */
+    .stAlert { border-radius: 10px !important; border: 1px solid #E4002B !important; }
 
-    /* Selectbox e Input bianchi con testo nero */
+    /* Input bianchi */
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
         background-color: white !important;
         color: black !important;
-    }
-
-    /* Linea di separazione rossa */
-    hr {
-        border: 0;
-        height: 2px;
-        background: #E4002B;
-        margin-bottom: 20px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -70,127 +49,112 @@ def load_data():
         dict_ptf = dict(zip(ptf['prodotto'].astype(str).str.strip(), ptf['categoria'].astype(str).str.strip()))
         return dict_attivi, dict_ptf
     except Exception as e:
-        st.error(f"Errore caricamento Excel: {e}")
+        st.error(f"Errore: Assicurati che il file si chiami 'prodotti.xlsx' e i fogli 'Attivi' e 'PTF'.")
         return {}, {}
 
 prodotti_attivi, prodotti_ptf = load_data()
 
 st.title("🔴 Simulatore Conflitti Generali")
+st.markdown("---")
 
-if not prodotti_attivi:
-    st.warning("In attesa del file 'prodotti.xlsx' su GitHub...")
-    st.stop()
+# 1. Selezione Prodotto
+st.subheader("Seleziona il prodotto di interesse")
+nuovo_prodotto = st.selectbox("", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
+st.info("⚠️ Ricordati di controllare anche l'IBAN di accredito")
 
-# --- INTERFACCIA ---
-st.subheader("1. Prodotto da Sottoscrivere")
-nuovo_prodotto = st.selectbox("Seleziona il prodotto che vuoi proporre:", options=[""] + sorted(list(prodotti_attivi.keys())))
+# 2. Riscatti
+st.markdown("### Ci sono stati riscatti?")
+if 'riscatti' not in st.session_state: st.session_state.riscatti = []
+if st.button("+ ", key="add_risc"):
+    st.session_state.riscatti.append({"data": datetime.now()})
 
-st.info("⚠️ NOTA: Verifica sempre l'IBAN di accredito per identificare eventuali riscatti collegati.")
+eventi_riscatti = []
+for i, r in enumerate(st.session_state.riscatti):
+    c1, c2, c3 = st.columns([2, 1, 0.5])
+    p = c1.selectbox(f"Prodotto riscatto {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"pr_{i}")
+    d = c2.date_input(f"Data liq.", value=r['data'], key=f"dr_{i}")
+    if c3.button("🗑️", key=f"delr_{i}"):
+        st.session_state.riscatti.pop(i)
+        st.rerun()
+    if p: eventi_riscatti.append({"cat": prodotti_ptf[p], "data": d})
 
-st.subheader("2. Riscatti e Risoluzioni")
-if 'eventi' not in st.session_state:
-    st.session_state.eventi = []
+# 3. Risoluzioni
+st.markdown("### Ci sono polizze in risoluzione o sospese?")
+if 'risoluzioni' not in st.session_state: st.session_state.risoluzioni = []
+if st.button("+ ", key="add_risol"):
+    st.session_state.risoluzioni.append({"data": datetime.now()})
 
-col_btn1, col_btn2 = st.columns(2)
-with col_btn1:
-    if st.button("➕ AGGIUNGI RISCATTO"):
-        st.session_state.eventi.append({"tipo": "Riscatto", "data": datetime.now()})
-with col_btn2:
-    if st.button("➕ AGGIUNGI RISOLUZIONE"):
-        st.session_state.eventi.append({"tipo": "Risoluzione", "data": datetime.now()})
+eventi_risoluzioni = []
+for i, r in enumerate(st.session_state.risoluzioni):
+    c1, c2, c3 = st.columns([2, 1, 0.5])
+    p = c1.selectbox(f"Prodotto risoluzione {i+1}", [""] + sorted(list(prodotti_ptf.keys())), key=f"ps_{i}")
+    d = c2.date_input(f"Data interr.", value=r['data'], key=f"ds_{i}")
+    if c3.button("🗑️", key=f"dels_{i}"):
+        st.session_state.risoluzioni.pop(i)
+        st.rerun()
+    if p: eventi_risoluzioni.append({"cat": prodotti_ptf[p], "data": d})
 
-eventi_validi = []
-for i, ev in enumerate(st.session_state.eventi):
-    with st.expander(f"Operazione {ev['tipo']} #{i+1}", expanded=True):
-        c1, c2, c3 = st.columns([2, 1, 0.5])
-        nome_v = c1.selectbox(f"Prodotto vecchio", options=[""] + sorted(list(prodotti_ptf.keys())), key=f"n_{i}")
-        data_v = c2.date_input(f"Data evento", value=ev['data'], key=f"d_{i}")
-        if c3.button("🗑️", key=f"del_{i}"):
-            st.session_state.eventi.pop(i)
-            st.rerun()
-        if nome_v:
-            eventi_validi.append({"nome": nome_v, "data": data_v, "cat": prodotti_ptf[nome_v]})
+st.markdown("---")
 
-st.markdown("<hr>", unsafe_allow_html=True)
-
-if st.button("ESEGUI VERIFICA CONFLITTI"):
+# 4. Calcolo
+if st.button("VERIFICA", use_container_width=True):
     if not nuovo_prodotto:
-        st.warning("Seleziona un prodotto di interesse.")
+        st.error("Seleziona un prodotto!")
     else:
         cat_nuovo = prodotti_attivi[nuovo_prodotto].lower()
-        conflitto = False
-        msg_conflitto = ""
+        tutti_eventi = eventi_riscatti + eventi_risoluzioni
         
-        # Mappa per trovare la data più recente per ogni categoria di sblocco
-        mappa_date_sblocco = {} # {categoria_vecchia: data_max}
-
-        for ev in eventi_validi:
-            cat_v = ev['cat'].lower()
-            data_v = datetime.combine(ev['data'], datetime.min.time())
+        # Logica blocco
+        bloccato = False
+        date_per_cat = {}
+        for ev in tutti_eventi:
+            cv = ev['cat'].lower()
+            dv = datetime.combine(ev['data'], datetime.min.time())
+            if cv not in date_per_cat or dv > date_per_cat[cv]: date_per_cat[cv] = dv
             
-            if cat_v not in mappa_date_sblocco or data_v > mappa_date_sblocco[cat_v]:
-                mappa_date_sblocco[cat_v] = data_v
+            if cat_nuovo == "protezione" and cv == "protezione": bloccato = True
+            elif cat_nuovo == "previdenza" and cv == "previdenza": bloccato = True
+            elif cat_nuovo == "investimento" and cv == "investimento": bloccato = True
+            elif cat_nuovo == "risparmio" and (cv == "investimento" or cv == "risparmio"): bloccato = True
 
-            # Controllo blocco prodotto attuale
-            is_bloccato = False
-            if cat_nuovo == "protezione" and cat_v == "protezione": is_bloccato = True
-            elif cat_nuovo == "previdenza" and cat_v == "previdenza": is_bloccato = True
-            elif cat_nuovo == "investimento" and cat_v == "investimento": is_bloccato = True
-            elif cat_nuovo == "risparmio" and (cat_v == "investimento" or cat_v == "risparmio"): is_bloccato = True
-            
-            if is_bloccato:
-                conflitto = True
-                msg_conflitto = f"Il prodotto scelto ({cat_nuovo.upper()}) è in conflitto con {ev['nome']} ({cat_v.upper()})."
-
-        if conflitto:
-            st.error(f"### ❌ NON PROCEDIBILE\n{msg_conflitto}")
+        st.subheader("Risultato")
+        if bloccato:
+            st.error(f"Per il prodotto {nuovo_prodotto} l'esito è: **NON PROCEDIBILE**")
         else:
-            st.success("### ✅ PROCEDIBILE")
+            st.success(f"Per il prodotto {nuovo_prodotto} l'esito è: **PROCEDIBILE**")
 
-        # --- RISULTATI DETTAGLIATI ---
-        st.subheader("📋 Esito dell'Analisi")
-        
-        prod_disponibili = []
-        prod_bloccati_per_data = {} # {data_sblocco: [lista_prodotti]}
+        # 5. Liste prodotti (come da immagine)
+        st.markdown("#### Per il prodotto che hai scelto è possibile fare i seguenti prodotti:")
+        disponibili = []
+        blocchi_futuri = {} # {data: [prodotti]}
 
         for p, c in prodotti_attivi.items():
-            c_l = c.lower()
-            can_do = True
-            data_sblocco_finale = None
-            
-            for cat_v, data_v in mappa_date_sblocco.items():
-                blocco_check = False
-                if c_l == "protezione" and cat_v == "protezione": blocco_check = True
-                elif c_l == "previdenza" and cat_v == "previdenza": blocco_check = True
-                elif c_l == "investimento" and cat_v == "investimento": blocco_check = True
-                elif c_l == "risparmio" and (cat_v == "investimento" or cat_v == "risparmio"): blocco_check = True
+            cl = c.lower()
+            match_data = None
+            for cv, dv in date_per_cat.items():
+                is_conf = False
+                if cl == "protezione" and cv == "protezione": is_conf = True
+                elif cl == "previdenza" and cv == "previdenza": is_conf = True
+                elif cl == "investimento" and cv == "investimento": is_conf = True
+                elif cl == "risparmio" and (cv == "investimento" or cv == "risparmio"): is_conf = True
                 
-                if blocco_check:
-                    can_do = False
-                    d_s = data_v + timedelta(days=367)
-                    if data_sblocco_finale is None or d_s > data_sblocco_finale:
-                        data_sblocco_finale = d_s
+                if is_conf:
+                    ds = (dv + timedelta(days=367)).strftime("%d/%m/%Y")
+                    if match_data is None or datetime.strptime(ds, "%d/%m/%Y") > datetime.strptime(match_data, "%d/%m/%Y"):
+                        match_data = ds
             
-            if can_do:
-                prod_disponibili.append(p)
+            if not match_data: disponibili.append(p)
             else:
-                d_str = data_sblocco_finale.strftime('%d/%m/%Y')
-                if d_str not in prod_bloccati_per_data: prod_bloccati_per_data[d_str] = []
-                prod_bloccati_per_data[d_str].append(p)
+                if match_data not in blocchi_futuri: blocchi_futuri[match_data] = []
+                blocchi_futuri[match_data].append(p)
 
-        st.markdown("#### ✅ Prodotti sottoscrivibili oggi:")
-        if prod_disponibili:
-            st.info(", ".join(sorted(prod_disponibili)))
-        else:
-            st.write("_Nessun prodotto disponibile al momento._")
+        st.write(", ".join(disponibili) if disponibili else "Nessuno")
 
-        if prod_bloccati_per_data:
-            st.markdown("#### ⏳ Prodotti non disponibili (Blocco 12 mesi):")
-            # Ordiniamo le date di sblocco per chiarezza
-            for d_sblocco in sorted(prod_bloccati_per_data.keys(), key=lambda x: datetime.strptime(x, '%d/%m/%Y')):
-                prods = prod_bloccati_per_data[d_sblocco]
-                st.warning(f"📅 **Disponibili dal {d_sblocco}:**")
-                st.write(", ".join(sorted(prods)))
+        st.markdown("---")
+        st.markdown("#### I seguenti prodotti saranno disponibili dopo la data riportata:")
+        for data_s, prods in blocchi_futuri.items():
+            st.warning(f"**Disponibili dal {data_s}:**")
+            st.write(", ".join(prods))
 
-st.markdown("<br><hr>", unsafe_allow_html=True)
-st.caption("ℹ️ Questo simulatore non fornisce elemento certo e non è perfetto, non verifica ad esempio le componenti protection.")
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.caption("Questo simulatore non fornisce elemento certo e non è perfetto, non verifica ad esempio le componenti protection.")

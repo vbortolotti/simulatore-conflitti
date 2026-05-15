@@ -80,6 +80,9 @@ st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("Scegli prodotto", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L\'IBAN</div>', unsafe_allow_html=True)
+st.markdown('<div class="nota-box">Nota: RICORDATI DI CHIEDERE SE VI SONO RISCATTI DI ALTRE AGENZIE</div>', unsafe_allow_html=True)
+st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE SE NON CI SONO PREMI UNICI AGGIUNTIVI NELLA POLZZIA RISCATTATA</div>', unsafe_allow_html=True)
+st.markdown('<div class="nota-box">Nota: RICORDATI SE IL RISCATTO È PA (RISPARMIO) CI PUÒ ESSERE IL CONFLITTO PER LA PARTE PROTECTION</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # 2. Eventi Precedenti

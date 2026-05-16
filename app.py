@@ -154,9 +154,12 @@ if st.button("VERIFICA", type="primary"):
             ev_comp = ev['comp']
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             
-            if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
-                max_sblocco_cat[cv] = data_sblocco
+            # Se la categoria coincide esattamente (es. Protezione con Protezione, Previdenza con Previdenza)
+            if cv == cat_scelta:
+                if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
+                    max_sblocco_cat[cv] = data_sblocco
                 
+            # Popoliamo le scadenze generali delle componenti
             if "PA" in ev_comp:
                 if max_sblocco_comp["PA"] is None or data_sblocco > max_sblocco_comp["PA"]:
                     max_sblocco_comp["PA"] = data_sblocco
@@ -172,16 +175,14 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
+            # 1. BLOCCO DI CATEGORIA DIRETTO (Es: Vecchia Protezione blocca Nuova Protezione)
             if cl in max_sblocco_cat:
                 m_date = max_sblocco_cat[cl]
-            if cl == "risparmio" and "investimento" in max_sblocco_cat:
-                date_inv = max_sblocco_cat["investimento"]
-                if m_date is None or date_inv > m_date:
-                    m_date = date_inv
                     
             if m_date:
                 final_block_dates[p] = m_date
             else:
+                # 2. CONFLITTI PER COMPONENTI (Usato anche per la dinamica Investimento / Risparmio)
                 comp_block_date = None
                 componenti_colpite = []
                 
@@ -195,8 +196,7 @@ if st.button("VERIFICA", type="primary"):
                         componenti_colpite.append("PU")
                         
                 if comp_block_date:
-                    # Se sono colpite sia PA che PU nello stesso prodotto
-                    txt_rischio = "Entrambe (PA e PU)" if len(componenti_colpite) > 1 or (max_sblocco_comp["PA"] and max_sblocco_comp["PU"]) else componenti_colpite[0]
+                    txt_rischio = "Entrambe (PA e PU)" if len(componenti_colpite) > 1 else componenti_colpite[0]
                     possibili_conflitti.append({
                         "Prodotto": p,
                         "Categoria": info["categoria"],
@@ -265,7 +265,6 @@ if st.button("VERIFICA", type="primary"):
         if possibili_conflitti:
             df_possibili = pd.DataFrame(possibili_conflitti)
             st.table(df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "Componente a Rischio", "In Sicurezza dal"]])
-            st.info("Nota: Per questi prodotti il conflitto non è certo al 100% perché dipende dalle componenti effettive della vecchia polizza. La data indica quando l'operazione sarà totalmente in sicurezza.")
         else:
             st.write("_Nessun potenziale conflitto rilevato sulle componenti o colonna componenti non presente nell'Excel._")
 

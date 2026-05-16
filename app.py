@@ -148,7 +148,7 @@ if st.button("VERIFICA", type="primary"):
         cat_scelta = prodotti_attivi[nuovo_prodotto]["categoria"].lower()
         comp_scelta = prodotti_attivi[nuovo_prodotto]["componenti"]
         
-        max_sblocco_cat = {}
+        max_sblocco_cat_identica = {}
         max_sblocco_comp = {"PA": None, "PU": None}
         
         for ev in tutti_eventi:
@@ -156,11 +156,12 @@ if st.button("VERIFICA", type="primary"):
             ev_comp = ev['comp']
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             
-            # Popoliamo le date massime per ciascuna categoria rilevata negli eventi
-            if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
-                max_sblocco_cat[cv] = data_sblocco
+            # 1. Registra blocco SOLO se la categoria coincide al 100% (es. Risparmio con Risparmio)
+            if cv == cat_scelta:
+                if cv not in max_sblocco_cat_identica or data_sblocco > max_sblocco_cat_identica[cv]:
+                    max_sblocco_cat_identica[cv] = data_sblocco
                 
-            # Popoliamo le scadenze generali delle componenti
+            # 2. Registra scadenze generali delle componenti per i potenziali incroci (es. Investimento con Risparmio)
             if "PA" in ev_comp:
                 if max_sblocco_comp["PA"] is None or data_sblocco > max_sblocco_comp["PA"]:
                     max_sblocco_comp["PA"] = data_sblocco
@@ -176,20 +177,14 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
-            # --- 1. CONFLITTO CERTO PER CATEGORIA CORRISPONDENTE ---
-            if cl in max_sblocco_cat:
-                m_date = max_sblocco_cat[cl]
-            
-            # REGOLA SPECIALE: Risparmio è bloccato in modo CERTO anche da Investimento
-            if cl == "risparmio" and "investimento" in max_sblocco_cat:
-                date_inv = max_sblocco_cat["investimento"]
-                if m_date is None or date_inv > m_date:
-                    m_date = date_inv
+            # Se la categoria è esattamente identica a quella bloccata, allora è blocco certo
+            if cl in max_sblocco_cat_identica:
+                m_date = max_sblocco_cat_identica[cl]
                     
             if m_date:
                 final_block_dates[p] = m_date
             else:
-                # --- 2. POSSIBILE CONFLITTO PER COMPONENTI (Se salvato dal blocco di categoria) ---
+                # Altrimenti, se le categorie sono diverse ma condividono componenti, è un potenziale conflitto
                 comp_block_date = None
                 componenti_colpite = []
                 
@@ -224,11 +219,11 @@ if st.button("VERIFICA", type="primary"):
                 data_sic = conflitto_corrente["In Sicurezza dal"]
                 
                 if comp_rischio == "Entrambe (PA e PU)":
-                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. Possibile conflitto per entrambe le componenti (sia PA che PU). In sicurezza totale dal {data_sic}")
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. È possibile farlo ma attenzione rischio conflitto per entrambe le componenti (sia PA che PU). In sicurezza totale dal {data_sic}")
                 elif "+" in comp_scelta:
-                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. Possibile conflitto qualora si volesse fare una componente {comp_rischio} (In sicurezza totale dal {data_sic})")
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. È possibile farlo ma attenzione rischio conflitto con componente {comp_rischio}. In sicurezza totale dal {data_sic}")
                 else:
-                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE (POSSIBILE CONFLITTO DI COMPONENTI {comp_scelta})**. Consigliato dal {data_sic}")
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. È possibile farlo ma attenzione rischio conflitto con componente {comp_scelta}. In sicurezza totale dal {data_sic}")
             else:
                 st.success(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **PROCEDIBILE**")
 

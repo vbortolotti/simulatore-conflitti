@@ -22,7 +22,7 @@ st.markdown("""
         border: 2px solid #01579b !important;
         padding: 12px !important;
         border-radius: 8px !important;
-        margin: 10px 0px !important;
+        margin: 8px 0px !important;
         font-weight: 500;
     }
 
@@ -97,10 +97,12 @@ if not prodotti_attivi:
 st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("Scegli prodotto", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
+# --- SEZIONE NOTE ---
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L\'IBAN</div>', unsafe_allow_html=True)
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CHIEDERE SE VI SONO RISCATTI DI ALTRE AGENZIE</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE SE NON CI SONO PREMI UNICI AGGIUNTIVI NELLA POLZZIA RISCATTATA</div>', unsafe_allow_html=True)
+st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE SE NON CI SONO PREMI UNICI AGGIUNTIVI NELLA POLIZZA RISCATTATA</div>', unsafe_allow_html=True)
 st.markdown('<div class="nota-box">Nota: RICORDATI SE IL RISCATTO È PA (RISPARMIO) CI PUÒ ESSERE IL CONFLITTO PER LA PARTE PROTECTION</div>', unsafe_allow_html=True)
+
 st.markdown("---")
 
 # 2. Eventi Precedenti
@@ -154,10 +156,9 @@ if st.button("VERIFICA", type="primary"):
             ev_comp = ev['comp']
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             
-            # Se la categoria coincide esattamente (es. Protezione con Protezione, Previdenza con Previdenza)
-            if cv == cat_scelta:
-                if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
-                    max_sblocco_cat[cv] = data_sblocco
+            # Popoliamo le date massime per ciascuna categoria rilevata negli eventi
+            if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
+                max_sblocco_cat[cv] = data_sblocco
                 
             # Popoliamo le scadenze generali delle componenti
             if "PA" in ev_comp:
@@ -175,14 +176,20 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
-            # 1. BLOCCO DI CATEGORIA DIRETTO (Es: Vecchia Protezione blocca Nuova Protezione)
+            # --- 1. CONFLITTO CERTO PER CATEGORIA CORRISPONDENTE ---
             if cl in max_sblocco_cat:
                 m_date = max_sblocco_cat[cl]
+            
+            # REGOLA SPECIALE: Risparmio è bloccato in modo CERTO anche da Investimento
+            if cl == "risparmio" and "investimento" in max_sblocco_cat:
+                date_inv = max_sblocco_cat["investimento"]
+                if m_date is None or date_inv > m_date:
+                    m_date = date_inv
                     
             if m_date:
                 final_block_dates[p] = m_date
             else:
-                # 2. CONFLITTI PER COMPONENTI (Usato anche per la dinamica Investimento / Risparmio)
+                # --- 2. POSSIBILE CONFLITTO PER COMPONENTI (Se salvato dal blocco di categoria) ---
                 comp_block_date = None
                 componenti_colpite = []
                 

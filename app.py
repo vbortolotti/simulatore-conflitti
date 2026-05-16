@@ -59,15 +59,12 @@ def load_data():
         attivi = pd.read_excel(xls, sheet_name="Attivi")
         ptf = pd.read_excel(xls, sheet_name="PTF")
         
-        # Pulizia standard dei nomi delle colonne
         attivi.columns = [str(c).strip().lower() for c in attivi.columns]
         ptf.columns = [str(c).strip().lower() for c in ptf.columns]
         
-        # Cerchiamo se esiste una colonna che contiene la parola 'compon'
         comp_col_attivi = next((c for c in attivi.columns if 'compon' in c), None)
         comp_col_ptf = next((c for c in ptf.columns if 'compon' in c), None)
         
-        # Mappatura Prodotti Attivi
         dict_attivi = {}
         for _, row in attivi.iterrows():
             p_name = str(row['prodotto']).strip()
@@ -75,7 +72,6 @@ def load_data():
             componenti = str(row[comp_col_attivi]).strip().upper() if comp_col_attivi and pd.notna(row[comp_col_attivi]) else "N.D."
             dict_attivi[p_name] = {"categoria": categoria, "componenti": componenti}
             
-        # Mappatura Prodotti PTF
         dict_ptf = {}
         for _, row in ptf.iterrows():
             p_name = str(row['prodotto']).strip()
@@ -85,7 +81,6 @@ def load_data():
             
         return dict_attivi, dict_ptf
     except Exception as e:
-        # Questo ci permette di vedere l'errore reale se qualcosa va storto
         st.error(f"Errore tecnico nella lettura del file Excel: {e}")
         return {}, {}
 
@@ -95,7 +90,7 @@ oggi = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("Verifica che il file 'prodotti.xlsx' sia caricato correttamente su GitHub e contenga i fogli 'Attivi' e 'PTF' con le colonne 'prodotto' e 'categoria'.")
+    st.warning("Verifica il file 'prodotti.xlsx' su GitHub.")
     st.stop()
 
 # 1. Selezione Prodotto
@@ -177,6 +172,7 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
+            # 1. CONFLITTI CERTI (PER CATEGORIA)
             if cl in max_sblocco_cat:
                 m_date = max_sblocco_cat[cl]
             if cl == "risparmio" and "investimento" in max_sblocco_cat:
@@ -187,29 +183,46 @@ if st.button("VERIFICA", type="primary"):
             if m_date:
                 final_block_dates[p] = m_date
             else:
+                # 2. CONFLITTI POSSIBILI (PER COMPONENTI)
                 comp_block_date = None
+                componente_interessata = ""
+                
+                # Se il vecchio evento ha colpito PA e il nuovo prodotto ha PA
                 if "PA" in cp and max_sblocco_comp["PA"]:
                     comp_block_date = max_sblocco_comp["PA"]
+                    componente_interessata = "PA"
+                # Se il vecchio evento ha colpito PU e il nuovo prodotto ha PU
                 if "PU" in cp and max_sblocco_comp["PU"]:
                     if comp_block_date is None or max_sblocco_comp["PU"] > comp_block_date:
                         comp_block_date = max_sblocco_comp["PU"]
+                        componente_interessata = "PU"
                         
                 if comp_block_date:
                     possibili_conflitti.append({
                         "Prodotto": p,
                         "Categoria": info["categoria"],
                         "Componenti Prodotto": cp,
+                        "Componente a Rischio": componente_interessata,
                         "In Sicurezza dal": comp_block_date.strftime("%d/%m/%Y")
                     })
 
+        # --- CONTROLLO E VISUALIZZAZIONE ESITO PRODOTTO SELEZIONATO ---
         st.write("#### Esito Prodotto Selezionato")
         if nuovo_prodotto in final_block_dates:
             st.error(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **NON PROCEDIBILE** (fino al {final_block_dates[nuovo_prodotto].strftime('%d/%m/%Y')})")
         else:
-            is_possibile = any(item["Prodotto"] == nuovo_prodotto for item in possibili_conflitti)
-            if is_possibile:
-                data_sicurezza = next(item["In Sicurezza dal"] for item in possibili_conflitti if item["Prodotto"] == nuovo_prodotto)
-                st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE (POSSIBILE CONFLITTO DI COMPONENTI {comp_scelta})**. Consigliato dal {data_sicurezza}")
+            # Cerchiamo se il prodotto selezionato ha una componente a rischio
+            conflitto_corrente = next((item for item in possibili_conflitti if item["Prodotto"] == nuovo_prodotto), None)
+            
+            if conflitto_corrente:
+                comp_rischio = conflitto_corrente["Componente a Rischio"]
+                data_sic = conflitto_corrente["In Sicurezza dal"]
+                
+                # Se il prodotto ha ENTRAMBE le componenti (ibrido tipo PA + PU), avvisiamo in modo specifico
+                if "+" in comp_scelta:
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. Possibile conflitto qualora si volesse fare una componente {comp_rischio} (In sicurezza totale dal {data_sic})")
+                else:
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE (POSSIBILE CONFLITTO DI COMPONENTI {comp_scelta})**. Consigliato dal {data_sic}")
             else:
                 st.success(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **PROCEDIBILE**")
 
@@ -252,7 +265,8 @@ if st.button("VERIFICA", type="primary"):
         st.write("### ⚠️ Possibili conflitti con i prodotti (Stesse Componenti PA / PU)")
         if possibili_conflitti:
             df_possibili = pd.DataFrame(possibili_conflitti)
-            st.table(df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "In Sicurezza dal"]])
+            # Mostriamo una tabella riorganizzata per essere chiara
+            st.table(df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "Componente a Rischio", "In Sicurezza dal"]])
             st.info("Nota: Per questi prodotti il conflitto non è certo al 100% perché dipende dalle componenti effettive della vecchia polizza. La data indica quando l'operazione sarà totalmente in sicurezza.")
         else:
             st.write("_Nessun potenziale conflitto rilevato sulle componenti o colonna componenti non presente nell'Excel._")

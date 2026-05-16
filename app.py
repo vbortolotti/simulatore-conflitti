@@ -148,7 +148,7 @@ if st.button("VERIFICA", type="primary"):
         cat_scelta = prodotti_attivi[nuovo_prodotto]["categoria"].lower()
         comp_scelta = prodotti_attivi[nuovo_prodotto]["componenti"]
         
-        max_sblocco_cat_identica = {}
+        max_sblocco_cat = {}
         max_sblocco_comp = {"PA": None, "PU": None}
         
         for ev in tutti_eventi:
@@ -156,12 +156,11 @@ if st.button("VERIFICA", type="primary"):
             ev_comp = ev['comp']
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             
-            # 1. Registra blocco SOLO se la categoria coincide al 100% (es. Risparmio con Risparmio)
-            if cv == cat_scelta:
-                if cv not in max_sblocco_cat_identica or data_sblocco > max_sblocco_cat_identica[cv]:
-                    max_sblocco_cat_identica[cv] = data_sblocco
+            # Registra la data massima di sblocco per ciascuna categoria rilevata negli eventi storici
+            if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
+                max_sblocco_cat[cv] = data_sblocco
                 
-            # 2. Registra scadenze generali delle componenti per i potenziali incroci (es. Investimento con Risparmio)
+            # Registra scadenze generali delle componenti
             if "PA" in ev_comp:
                 if max_sblocco_comp["PA"] is None or data_sblocco > max_sblocco_comp["PA"]:
                     max_sblocco_comp["PA"] = data_sblocco
@@ -177,14 +176,14 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
-            # Se la categoria è esattamente identica a quella bloccata, allora è blocco certo
-            if cl in max_sblocco_cat_identica:
-                m_date = max_sblocco_cat_identica[cl]
+            # Se la categoria coincide esattamente con una di quelle colpite dagli eventi precedenti -> BLOCCO CERTO
+            if cl in max_sblocco_cat:
+                m_date = max_sblocco_cat[cl]
                     
             if m_date:
                 final_block_dates[p] = m_date
             else:
-                # Altrimenti, se le categorie sono diverse ma condividono componenti, è un potenziale conflitto
+                # Altrimenti, se le categorie sono diverse ma si incrociano sulle componenti -> POTENZIALE CONFLITTO
                 comp_block_date = None
                 componenti_colpite = []
                 

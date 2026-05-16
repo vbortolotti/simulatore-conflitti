@@ -98,9 +98,6 @@ st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("Scegli prodotto", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L\'IBAN</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI DI CHIEDERE SE VI SONO RISCATTI DI ALTRE AGENZIE</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE SE NON CI SONO PREMI UNICI AGGIUNTIVI NELLA POLZZIA RISCATTATA</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI SE IL RISCATTO È PA (RISPARMIO) CI PUÒ ESSERE IL CONFLITTO PER LA PARTE PROTECTION</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # 2. Eventi Precedenti
@@ -172,7 +169,6 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
-            # 1. CONFLITTI CERTI (PER CATEGORIA)
             if cl in max_sblocco_cat:
                 m_date = max_sblocco_cat[cl]
             if cl == "risparmio" and "investimento" in max_sblocco_cat:
@@ -183,43 +179,43 @@ if st.button("VERIFICA", type="primary"):
             if m_date:
                 final_block_dates[p] = m_date
             else:
-                # 2. CONFLITTI POSSIBILI (PER COMPONENTI)
                 comp_block_date = None
-                componente_interessata = ""
+                componenti_colpite = []
                 
-                # Se il vecchio evento ha colpito PA e il nuovo prodotto ha PA
                 if "PA" in cp and max_sblocco_comp["PA"]:
                     comp_block_date = max_sblocco_comp["PA"]
-                    componente_interessata = "PA"
-                # Se il vecchio evento ha colpito PU e il nuovo prodotto ha PU
+                    componenti_colpite.append("PA")
                 if "PU" in cp and max_sblocco_comp["PU"]:
                     if comp_block_date is None or max_sblocco_comp["PU"] > comp_block_date:
                         comp_block_date = max_sblocco_comp["PU"]
-                        componente_interessata = "PU"
+                    if "PU" not in componenti_colpite:
+                        componenti_colpite.append("PU")
                         
                 if comp_block_date:
+                    # Se sono colpite sia PA che PU nello stesso prodotto
+                    txt_rischio = "Entrambe (PA e PU)" if len(componenti_colpite) > 1 or (max_sblocco_comp["PA"] and max_sblocco_comp["PU"]) else componenti_colpite[0]
                     possibili_conflitti.append({
                         "Prodotto": p,
                         "Categoria": info["categoria"],
                         "Componenti Prodotto": cp,
-                        "Componente a Rischio": componente_interessata,
+                        "Componente a Rischio": txt_rischio,
                         "In Sicurezza dal": comp_block_date.strftime("%d/%m/%Y")
                     })
 
-        # --- CONTROLLO E VISUALIZZAZIONE ESITO PRODOTTO SELEZIONATO ---
+        # --- VISUALIZZAZIONE ESITO PRODOTTO SELEZIONATO ---
         st.write("#### Esito Prodotto Selezionato")
         if nuovo_prodotto in final_block_dates:
             st.error(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **NON PROCEDIBILE** (fino al {final_block_dates[nuovo_prodotto].strftime('%d/%m/%Y')})")
         else:
-            # Cerchiamo se il prodotto selezionato ha una componente a rischio
             conflitto_corrente = next((item for item in possibili_conflitti if item["Prodotto"] == nuovo_prodotto), None)
             
             if conflitto_corrente:
                 comp_rischio = conflitto_corrente["Componente a Rischio"]
                 data_sic = conflitto_corrente["In Sicurezza dal"]
                 
-                # Se il prodotto ha ENTRAMBE le componenti (ibrido tipo PA + PU), avvisiamo in modo specifico
-                if "+" in comp_scelta:
+                if comp_rischio == "Entrambe (PA e PU)":
+                    st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. Possibile conflitto per entrambe le componenti (sia PA che PU). In sicurezza totale dal {data_sic}")
+                elif "+" in comp_scelta:
                     st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE**. Possibile conflitto qualora si volesse fare una componente {comp_rischio} (In sicurezza totale dal {data_sic})")
                 else:
                     st.warning(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **ATTENZIONE (POSSIBILE CONFLITTO DI COMPONENTI {comp_scelta})**. Consigliato dal {data_sic}")
@@ -265,7 +261,6 @@ if st.button("VERIFICA", type="primary"):
         st.write("### ⚠️ Possibili conflitti con i prodotti (Stesse Componenti PA / PU)")
         if possibili_conflitti:
             df_possibili = pd.DataFrame(possibili_conflitti)
-            # Mostriamo una tabella riorganizzata per essere chiara
             st.table(df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "Componente a Rischio", "In Sicurezza dal"]])
             st.info("Nota: Per questi prodotti il conflitto non è certo al 100% perché dipende dalle componenti effettive della vecchia polizza. La data indica quando l'operazione sarà totalmente in sicurezza.")
         else:

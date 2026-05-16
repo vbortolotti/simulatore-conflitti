@@ -59,33 +59,34 @@ def load_data():
         attivi = pd.read_excel(xls, sheet_name="Attivi")
         ptf = pd.read_excel(xls, sheet_name="PTF")
         
-        attivi.columns = [c.strip().lower() for c in attivi.columns]
-        ptf.columns = [c.strip().lower() for c in ptf.columns]
+        # Pulizia standard dei nomi delle colonne
+        attivi.columns = [str(c).strip().lower() for c in attivi.columns]
+        ptf.columns = [str(c).strip().lower() for c in ptf.columns]
         
-        # Mappatura Prodotti Attivi: salviamo sia Categoria che Componenti
-        # Se la colonna 'componenti' non esiste, usiamo un valore vuoto di default
-        comp_col = 'componenti' if 'componenti' in attivi.columns else attivi.columns[2] 
+        # Cerchiamo se esiste una colonna che contiene la parola 'compon'
+        comp_col_attivi = next((c for c in attivi.columns if 'compon' in c), None)
+        comp_col_ptf = next((c for c in ptf.columns if 'compon' in c), None)
         
+        # Mappatura Prodotti Attivi
         dict_attivi = {}
         for _, row in attivi.iterrows():
             p_name = str(row['prodotto']).strip()
-            dict_attivi[p_name] = {
-                "categoria": str(row['categoria']).strip(),
-                "componenti": str(row[comp_col]).strip().upper() if comp_col in row else ""
-            }
+            categoria = str(row['categoria']).strip()
+            componenti = str(row[comp_col_attivi]).strip().upper() if comp_col_attivi and pd.notna(row[comp_col_attivi]) else "N.D."
+            dict_attivi[p_name] = {"categoria": categoria, "componenti": componenti}
             
-        # Mappatura Prodotti in Portafoglio (PTF)
-        comp_ptf_col = 'componenti' if 'componenti' in ptf.columns else ptf.columns[2]
+        # Mappatura Prodotti PTF
         dict_ptf = {}
         for _, row in ptf.iterrows():
             p_name = str(row['prodotto']).strip()
-            dict_ptf[p_name] = {
-                "categoria": str(row['categoria']).strip(),
-                "componenti": str(row[comp_ptf_col]).strip().upper() if comp_ptf_col in row else ""
-            }
+            categoria = str(row['categoria']).strip()
+            componenti = str(row[comp_col_ptf]).strip().upper() if comp_col_ptf and pd.notna(row[comp_col_ptf]) else "N.D."
+            dict_ptf[p_name] = {"categoria": categoria, "componenti": componenti}
             
         return dict_attivi, dict_ptf
-    except:
+    except Exception as e:
+        # Questo ci permette di vedere l'errore reale se qualcosa va storto
+        st.error(f"Errore tecnico nella lettura del file Excel: {e}")
         return {}, {}
 
 prodotti_attivi, prodotti_ptf = load_data()
@@ -94,7 +95,7 @@ oggi = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 st.write("### Simulatore Conflitti")
 
 if not prodotti_attivi:
-    st.warning("Carica il file prodotti.xlsx aggiornato con la colonna delle Componenti.")
+    st.warning("Verifica che il file 'prodotti.xlsx' sia caricato correttamente su GitHub e contenga i fogli 'Attivi' e 'PTF' con le colonne 'prodotto' e 'categoria'.")
     st.stop()
 
 # 1. Selezione Prodotto
@@ -102,9 +103,6 @@ st.write("ciao inserisci il prodotto che vuoi fare")
 nuovo_prodotto = st.selectbox("Scegli prodotto", options=[""] + sorted(list(prodotti_attivi.keys())), label_visibility="collapsed")
 
 st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE ANCHE I RISCATTI CHE HANNO AVUTO IN COMUNE L\'IBAN</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI DI CHIEDERE SE VI SONO RISCATTI DI ALTRE AGENZIE</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI DI CONTROLLARE SE NON CI SONO PREMI UNICI AGGIUNTIVI NELLA POLZZIA RISCATTATA</div>', unsafe_allow_html=True)
-st.markdown('<div class="nota-box">Nota: RICORDATI SE IL RISCATTO È PA (RISPARMIO) CI PUÒ ESSERE IL CONFLITTO PER LA PARTE PROTECTION</div>', unsafe_allow_html=True)
 st.markdown("---")
 
 # 2. Eventi Precedenti
@@ -150,9 +148,7 @@ if st.button("VERIFICA", type="primary"):
         cat_scelta = prodotti_attivi[nuovo_prodotto]["categoria"].lower()
         comp_scelta = prodotti_attivi[nuovo_prodotto]["componenti"]
         
-        # Sblocchi per Categoria
         max_sblocco_cat = {}
-        # Sblocchi per Componenti (PA, PU)
         max_sblocco_comp = {"PA": None, "PU": None}
         
         for ev in tutti_eventi:
@@ -160,11 +156,9 @@ if st.button("VERIFICA", type="primary"):
             ev_comp = ev['comp']
             data_sblocco = datetime.combine(ev['data'], datetime.min.time()) + timedelta(days=367)
             
-            # Calcolo blocchi categorie
             if cv not in max_sblocco_cat or data_sblocco > max_sblocco_cat[cv]:
                 max_sblocco_cat[cv] = data_sblocco
                 
-            # Calcolo blocchi componenti
             if "PA" in ev_comp:
                 if max_sblocco_comp["PA"] is None or data_sblocco > max_sblocco_comp["PA"]:
                     max_sblocco_comp["PA"] = data_sblocco
@@ -172,7 +166,6 @@ if st.button("VERIFICA", type="primary"):
                 if max_sblocco_comp["PU"] is None or data_sblocco > max_sblocco_comp["PU"]:
                     max_sblocco_comp["PU"] = data_sblocco
 
-        # Costruzione scadenze effettive per i prodotti attivi
         final_block_dates = {}
         possibili_conflitti = []
 
@@ -181,7 +174,6 @@ if st.button("VERIFICA", type="primary"):
             cp = info["componenti"]
             m_date = None
             
-            # --- 1. CONFLITTI CERTI (PER CATEGORIA) ---
             if cl in max_sblocco_cat:
                 m_date = max_sblocco_cat[cl]
             if cl == "risparmio" and "investimento" in max_sblocco_cat:
@@ -192,10 +184,7 @@ if st.button("VERIFICA", type="primary"):
             if m_date:
                 final_block_dates[p] = m_date
             else:
-                # --- 2. CONFLITTI POSSIBILI (PER COMPONENTI UGUALI PA / PU) ---
-                # Controlliamo se non è già bloccato per categoria, ma ha componenti potenzialmente sovrapposte
                 comp_block_date = None
-                
                 if "PA" in cp and max_sblocco_comp["PA"]:
                     comp_block_date = max_sblocco_comp["PA"]
                 if "PU" in cp and max_sblocco_comp["PU"]:
@@ -210,12 +199,10 @@ if st.button("VERIFICA", type="primary"):
                         "In Sicurezza dal": comp_block_date.strftime("%d/%m/%Y")
                     })
 
-        # Esito prodotto selezionato sul momento
         st.write("#### Esito Prodotto Selezionato")
         if nuovo_prodotto in final_block_dates:
             st.error(f"Per il prodotto **{nuovo_prodotto}** l'esito è: **NON PROCEDIBILE** (fino al {final_block_dates[nuovo_prodotto].strftime('%d/%m/%Y')})")
         else:
-            # Controllo se è tra i possibili conflitti di componenti
             is_possibile = any(item["Prodotto"] == nuovo_prodotto for item in possibili_conflitti)
             if is_possibile:
                 data_sicurezza = next(item["In Sicurezza dal"] for item in possibili_conflitti if item["Prodotto"] == nuovo_prodotto)
@@ -225,10 +212,9 @@ if st.button("VERIFICA", type="primary"):
 
         st.markdown("---")
 
-        # --- TABELLA 1: SI - PRODOTTI DISPONIBILI OGGI ---
+        # --- TABELLA 1: SI ---
         prods_si = {}
         for p, info in prodotti_attivi.items():
-            # Un prodotto è disponibile oggi solo se non ha blocchi certi di categoria
             if p not in final_block_dates:
                 c = info["categoria"]
                 if c not in prods_si: prods_si[c] = []
@@ -241,7 +227,6 @@ if st.button("VERIFICA", type="primary"):
                 with si_cols[i]:
                     st.markdown(f"**{cat_name}**")
                     for lp in sorted(list_p):
-                        # Evidenzia se il prodotto disponibile ha comunque un'allerta componenti
                         check_alert = "⚠️ " if any(item["Prodotto"] == lp for item in possibili_conflitti) else "• "
                         st.write(f"{check_alert}{lp}")
         else:
@@ -249,7 +234,7 @@ if st.button("VERIFICA", type="primary"):
 
         st.markdown("---")
 
-        # TABELLA 2: NO - CONFLITTI CERTI (PER CATEGORIA)
+        # TABELLA 2: NO
         st.write("### ❌ NO - Prodotti Momentaneamente Bloccati per Categoria")
         if final_block_dates:
             prods_no = [{"Prodotto": p, "Categoria": prodotti_attivi[p]["categoria"], "Disponibile dal": final_block_dates[p].strftime("%d/%m/%Y")} for p in final_block_dates]
@@ -260,13 +245,13 @@ if st.button("VERIFICA", type="primary"):
 
         st.markdown("---")
 
-        # --- TABELLA 3: NUOVA SEZIONE POSSIBILI CONFLITTI COMPONENTI ---
+        # TABELLA 3: POTENZIALI
         st.write("### ⚠️ Possibili conflitti con i prodotti (Stesse Componenti PA / PU)")
         if possibili_conflitti:
             df_possibili = pd.DataFrame(possibili_conflitti)
-            st.table(df_possibles_riordinati := df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "In Sicurezza dal"]])
+            st.table(df_possibili[["Prodotto", "Categoria", "Componenti Prodotto", "In Sicurezza dal"]])
             st.info("Nota: Per questi prodotti il conflitto non è certo al 100% perché dipende dalle componenti effettive della vecchia polizza. La data indica quando l'operazione sarà totalmente in sicurezza.")
         else:
-            st.write("_Nessun potenziale conflitto rilevato sulle componenti._")
+            st.write("_Nessun potenziale conflitto rilevato sulle componenti o colonna componenti non presente nell'Excel._")
 
 st.markdown("<br><br><small>Questo simulatore non fornisce elemento certo e non è perfetto.</small>", unsafe_allow_html=True)
